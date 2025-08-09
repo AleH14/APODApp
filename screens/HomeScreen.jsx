@@ -9,9 +9,14 @@ import {
   Dimensions,
   FlatList,
   Pressable,
+  useColorScheme,
+  Alert,
 } from "react-native";
 import React, { useEffect, useState } from "react";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { lightTheme, darkTheme } from "../theme/color";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Animated,{FadeIn,FadeOut} from "react-native-reanimated";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -22,28 +27,52 @@ export default function HomeScreen({ navigation }) {
   const [endDate, setEndDate] = useState(null);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const colorScheme = useColorScheme();
+  const CACHE_KEY = "apod_cache";
+  const CACHE_DURATION = 48 * 60 * 60 * 1000; // 48 horas en milisegundos
+
+  const theme = colorScheme === "dark" ? darkTheme : lightTheme;
 
   const fetchImages = async () => {
     try {
-      const apiKey = process.env.EXPO_PUBLIC_NASA_API_KEY;
-
-      if (!apiKey) {
-        throw new Error("API key no encontrada en variables de entorno");
+      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const { timestamp, data } = JSON.parse(cached);
+        const now = Date.now();
+        if (now - timestamp < CACHE_DURATION) {
+          console.log("Cargando imágenes desde caché");
+          setApodData(data);
+          setLoading(false);
+          return;
+        }
       }
+
+      console.log("Cargando imágenes desde la API");
+      const apiKey = process.env.EXPO_PUBLIC_NASA_API_KEY;
+      if (!apiKey)
+        throw new Error("API key no encontrada en variables de entorno");
 
       const response = await fetch(
         `https://api.nasa.gov/planetary/apod?start_date=2025-08-01&end_date=2025-08-03&api_key=${apiKey}`
       );
-
-      if (!response.ok) {
+      if (!response.ok)
         throw new Error(`HTTP error! status: ${response.status}`);
-      }
 
       const json = await response.json();
       const onlyImages = json.filter((item) => item.media_type === "image");
+
+      // Guardar en caché con timestamp
+      await AsyncStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({
+          timestamp: Date.now(),
+          data: onlyImages,
+        })
+      );
+
       setApodData(onlyImages);
     } catch (error) {
-      console.error("Error al cargar las imagenes", error);
+      console.error("Error al cargar las imágenes", error);
     } finally {
       setLoading(false);
     }
@@ -99,7 +128,7 @@ export default function HomeScreen({ navigation }) {
       }
 
       const json = await response.json();
-      const onlyImages = json.filter((tem) => item.media_type === "image");
+      const onlyImages = json.filter((item) => item.media_type === "image");
 
       if (onlyImages.length === 0) {
         alert("No se encontraron imágenes para ese rango.");
@@ -123,8 +152,18 @@ export default function HomeScreen({ navigation }) {
     );
   }
 
+  const renderItem = ({ item }) => (
+    <Animated.View entering={FadeIn} exiting={FadeOut}>
+      <Text style={[styles.title, { color: theme.text }]}>{item.title}</Text>
+      <Image source={{ uri: item.url }} style={styles.image} />
+      <Text style={[styles.explanation, { color: theme.text }]}>
+        {item.explanation}
+      </Text>
+    </Animated.View>
+  );
+
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <FlatList
         data={apodData}
         keyExtractor={(item) => item.date}
@@ -141,7 +180,7 @@ export default function HomeScreen({ navigation }) {
               title="Seleccionar fecha de inicio"
               onPress={() => setShowStartPicker(true)}
             />
-            <Text style={{ marginVertical: 5 }}>
+            <Text style={{ marginVertical: 5, color: theme.text }}>
               Fecha de inicio:{" "}
               {startDate ? startDate.toDateString() : "No selecionada"}
             </Text>
@@ -150,7 +189,7 @@ export default function HomeScreen({ navigation }) {
               title="Seleccionar fecha fin"
               onPress={() => setShowEndPicker(true)}
             />
-            <Text style={{ marginVertical: 5 }}>
+            <Text style={{ marginVertical: 5, color: theme.text }}>
               Fecha de fin:{" "}
               {endDate ? endDate.toDateString() : "No seleccionada"}
             </Text>
@@ -186,28 +225,16 @@ export default function HomeScreen({ navigation }) {
             )}
           </View>
         }
-        renderItem={({ item }) => {
-          return (
-            <Pressable
-              onPress={() => navigation.navigate("Detalles", { item })}
-            >
-              <View style={{ marginBotton: 20 }}>
-                <Text style={styles.title}>{item.title}</Text>
-                <Image source={{ uri: item.url }} style={styles.image} />
-                <Text style={styles.explanation}>{item.explanation}</Text>
-              </View>
-            </Pressable>
-          );
-        }}
+        renderItem={renderItem}
         contentContainerStyle={styles.container}
       />
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
+    padding: 10,
     alignItems: "center",
   },
   center: {
@@ -229,5 +256,6 @@ const styles = StyleSheet.create({
   explanation: {
     fontSize: 16,
     textAlign: "justify",
+    marginBottom: 20,
   },
 });
