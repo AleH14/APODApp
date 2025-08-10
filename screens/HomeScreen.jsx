@@ -1,4 +1,4 @@
-import { StatusBar } from "expo-status-bar";
+
 import {
   ActivityIndicator,
   Button,
@@ -10,13 +10,14 @@ import {
   FlatList,
   Pressable,
   useColorScheme,
-  Alert,
+  StatusBar
 } from "react-native";
 import React, { useEffect, useState } from "react";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { lightTheme, darkTheme } from "../theme/color";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Animated,{FadeIn,FadeOut} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -32,6 +33,7 @@ export default function HomeScreen({ navigation }) {
   const CACHE_DURATION = 48 * 60 * 60 * 1000; // 48 horas en milisegundos
 
   const theme = colorScheme === "dark" ? darkTheme : lightTheme;
+  const insets = useSafeAreaInsets();
 
   const fetchImages = async () => {
     try {
@@ -154,21 +156,38 @@ export default function HomeScreen({ navigation }) {
 
   const renderItem = ({ item }) => (
     <Animated.View entering={FadeIn} exiting={FadeOut}>
-      <Text style={[styles.title, { color: theme.text }]}>{item.title}</Text>
-      <Image source={{ uri: item.url }} style={styles.image} />
-      <Text style={[styles.explanation, { color: theme.text }]}>
-        {item.explanation}
-      </Text>
+      <Pressable
+        onPress={() => navigation.navigate("FullScreenImage", { item })}
+      >
+        <View>
+        <Text style={[styles.title, { color: theme.text }]}>{item.title}</Text>
+        <Image source={{ uri: item.url }} style={styles.image} />
+        <Text style={[styles.explanation, { color: theme.text }]}>
+          {item.explanation}
+        </Text>
+      </View>
+      </Pressable>
     </Animated.View>
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <View style={{ 
+      flex: 1, 
+      backgroundColor: theme.background,
+      paddingTop: insets.top,
+      paddingBottom: insets.bottom 
+    }}>
+      <StatusBar
+  backgroundColor="#ffffffff" // Fondo blanco (solo Android)
+  barStyle="dark-content"   // Texto e iconos oscuros
+/>
+
       <FlatList
         data={apodData}
         keyExtractor={(item) => item.date}
         ListHeaderComponent={
           <View>
+            
             <View style={{ marginBottom: 20 }}>
               <Button
                 title="Recargar imágenes aleatorias"
@@ -182,7 +201,7 @@ export default function HomeScreen({ navigation }) {
             />
             <Text style={{ marginVertical: 5, color: theme.text }}>
               Fecha de inicio:{" "}
-              {startDate ? startDate.toDateString() : "No selecionada"}
+              {startDate ? startDate.toDateString() : "No seleccionada"}
             </Text>
 
             <Button
